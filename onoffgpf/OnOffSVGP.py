@@ -2,20 +2,19 @@ from __future__ import absolute_import
 import tensorflow as tf
 import numpy as np
 import pickle
-from gpflow.param import Param
-from gpflow.model import Model
+from gpflow.models import BayesianModel, ExternalDataTrainingLossMixin, InternalDataTrainingLossMixin
+from gpflow.base import Parameter
 from gpflow.mean_functions import Zero
-from gpflow import transforms, conditionals, kullback_leiblers
-from gpflow.param import AutoFlow, DataHolder
-from gpflow._settings import settings
-from gpflow.minibatch import MinibatchData
+from gpflow import conditionals, kullback_leiblers
+from gpflow.utilities import positive, triangular
+from gpflow.config import default_float, default_jitter
 from math import pi
 import time
 
-float_type = settings.dtypes.float_type
+float_type = default_float()
 np_float_type = np.float32 if float_type is tf.float32 else np.float64
 
-class OnOffSVGP(Model):
+class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
     """
     - X is a data matrix, size N x D
     - Y is a data matrix, size N x 1
@@ -25,7 +24,7 @@ class OnOffSVGP(Model):
 
     def __init__(self, X, Y, kernf, kerng, likelihood, Zf, Zg, mean_function=None, minibatch_size=None, 
                  name='model'):
-        Model.__init__(self, name)
+        super().__init__(name=name)
         self.mean_function = mean_function or Zero()
         self.kernf = kernf
         self.kerng = kerng
@@ -34,41 +33,32 @@ class OnOffSVGP(Model):
         self.q_diag = True
 
         # save initial attributes for future plotting purpose
-        Xtrain = DataHolder(X)
-        Ytrain = DataHolder(Y)
-        self.Xtrain, self.Ytrain = Xtrain, Ytrain
+        self.Xtrain, self.Ytrain = X.copy(), Y.copy()
 
-        # sort out the X, Y into MiniBatch objects.
-        if minibatch_size is None:
-            minibatch_size = X.shape[0]
-        self.num_data = X.shape[0]
-        self.num_latent = Y.shape[1]  # num_latent will be 1
-        self.X = MinibatchData(X, minibatch_size, np.random.RandomState(0))
-        self.Y = MinibatchData(Y, minibatch_size, np.random.RandomState(0))
+        # this used to be minibatching
+        self.X, self.Y = X.copy(), Y.copy()
 
         # Add variational paramters
-        self.Zf = Param(Zf)
-        self.Zg = Param(Zg)
+        self.Zf = Parameter(Zf)
+        self.Zg = Parameter(Zg)
         self.num_inducing_f = Zf.shape[0]
         self.num_inducing_g = Zg.shape[0]
 
         # init variational parameters
-        self.u_fm = Param(np.random.randn(self.num_inducing_f, self.num_latent) * 0.01)
-        self.u_gm = Param(np.random.randn(self.num_inducing_g, self.num_latent) * 0.01)
+        self.u_fm = Parameter(np.random.randn(self.num_inducing_f, self.num_latent) * 0.01)
+        self.u_gm = Parameter(np.random.randn(self.num_inducing_g, self.num_latent) * 0.01)
 
         if self.q_diag:
-            self.u_fs_sqrt = Param(np.ones((self.num_inducing_f, self.num_latent)),
-                                transforms.positive)
-            self.u_gs_sqrt = Param(np.ones((self.num_inducing_g, self.num_latent)),
-                                transforms.positive)
+            self.u_fs_sqrt = Parameter(np.ones((self.num_inducing_f, self.num_latent)), positive())
+            self.u_gs_sqrt = Parameter(np.ones((self.num_inducing_g, self.num_latent)), positive())
         else:
             u_fs_sqrt = np.array([np.eye(self.num_inducing_f)
                                   for _ in range(self.num_latent)]).swapaxes(0, 2)
-            self.u_fs_sqrt = Param(u_fs_sqrt, transforms.LowerTriangular(u_fs_sqrt.shape[2]))
+            self.u_fs_sqrt = Parameter(u_fs_sqrt, triangular())
 
             u_gs_sqrt = np.array([np.eye(self.num_inducing_g)
                                   for _ in range(self.num_latent)]).swapaxes(0, 2)
-            self.u_gs_sqrt = Param(u_gs_sqrt, transforms.LowerTriangular(u_gs_sqrt.shape[2]))
+            self.u_gs_sqrt = Parameter(u_gs_sqrt, triangular())
 
     def build_prior_KL(self):
         # whitening of priors can be implemented here
@@ -93,8 +83,8 @@ class OnOffSVGP(Model):
                 KL = kullback_leiblers.gauss_kl_white(self.u_fm, self.u_fs_sqrt) + \
                      kullback_leiblers.gauss_kl_white(self.u_gm, self.u_gs_sqrt)
         else:
-            Kfmm = self.kernf.K(self.Zf) + tf.eye(self.num_inducing_f, dtype=float_type) * settings.numerics.jitter_level
-            Kgmm = self.kerng.K(self.Zg) + tf.eye(self.num_inducing_g, dtype=float_type) * settings.numerics.jitter_level
+            Kfmm = self.kernf.K(self.Zf) + tf.eye(self.num_inducing_f, dtype=float_type) * default_jitter()
+            Kgmm = self.kerng.K(self.Zg) + tf.eye(self.num_inducing_g, dtype=float_type) * default_jitter()
 
             if self.q_diag:
                 KL = kullback_leiblers.gauss_kl_diag(self.u_fm, self.u_fs_sqrt, Kfmm) + \
@@ -116,8 +106,8 @@ class OnOffSVGP(Model):
         var_exp = self.likelihood.variational_expectations(gfmean, gfvar, gfmeanu, self.Y)
 
         # re-scale for minibatch size
-        scale = tf.cast(self.num_data, settings.dtypes.float_type) / \
-                tf.cast(tf.shape(self.X)[0], settings.dtypes.float_type)
+        scale = tf.cast(self.num_data, default_float()) / \
+                tf.cast(tf.shape(self.X)[0], default_float())
 
         return tf.reduce_sum(var_exp) * scale - KL
 
@@ -157,12 +147,14 @@ class OnOffSVGP(Model):
         else:
             pickle.dump(self,open(fname, "wb"))
 
-    @AutoFlow((float_type, [None, None]))
+
     def predict_onoffgp(self, Xnew):
+        """Formerly used AutoFlow """
         return self.build_predict(Xnew)
 
-    @AutoFlow()
+
     def compute_prior_KL(self):
+        """Formerly used AutoFlow """
         return self.build_prior_KL()
 
     @staticmethod
