@@ -38,6 +38,9 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         # this used to be minibatching
         self.X, self.Y = X.copy(), Y.copy()
 
+        self.num_data = X.shape[0]
+        self.num_latent = Y.shape[1]  # num_latent will be 1
+
         # Add variational paramters
         self.Zf = Parameter(Zf)
         self.Zg = Parameter(Zg)
@@ -49,16 +52,16 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         self.u_gm = Parameter(np.random.randn(self.num_inducing_g, self.num_latent) * 0.01)
 
         if self.q_diag:
-            self.u_fs_sqrt = Parameter(np.ones((self.num_inducing_f, self.num_latent)), positive())
-            self.u_gs_sqrt = Parameter(np.ones((self.num_inducing_g, self.num_latent)), positive())
+            self.u_fs_sqrt = Parameter(value=np.ones((self.num_inducing_f, self.num_latent)), transform=positive())
+            self.u_gs_sqrt = Parameter(value=np.ones((self.num_inducing_g, self.num_latent)), transform=positive())
         else:
             u_fs_sqrt = np.array([np.eye(self.num_inducing_f)
                                   for _ in range(self.num_latent)]).swapaxes(0, 2)
-            self.u_fs_sqrt = Parameter(u_fs_sqrt, triangular())
+            self.u_fs_sqrt = Parameter(value=u_fs_sqrt, transform=triangular())
 
             u_gs_sqrt = np.array([np.eye(self.num_inducing_g)
                                   for _ in range(self.num_latent)]).swapaxes(0, 2)
-            self.u_gs_sqrt = Parameter(u_gs_sqrt, triangular())
+            self.u_gs_sqrt = Parameter(value=u_gs_sqrt, transform=triangular())
 
     def build_prior_KL(self):
         # whitening of priors can be implemented here
@@ -86,12 +89,8 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
             Kfmm = self.kernf.K(self.Zf) + tf.eye(self.num_inducing_f, dtype=float_type) * default_jitter()
             Kgmm = self.kerng.K(self.Zg) + tf.eye(self.num_inducing_g, dtype=float_type) * default_jitter()
 
-            if self.q_diag:
-                KL = kullback_leiblers.gauss_kl_diag(self.u_fm, self.u_fs_sqrt, Kfmm) + \
-                     kullback_leiblers.gauss_kl_diag(self.u_gm, self.u_gs_sqrt, Kgmm)
-            else:
-                KL = kullback_leiblers.gauss_kl(self.u_fm, self.u_fs_sqrt, Kfmm) + \
-                     kullback_leiblers.gauss_kl(self.u_gm, self.u_gs_sqrt, Kgmm)
+            KL = kullback_leiblers.gauss_kl(self.u_fm, self.u_fs_sqrt, Kfmm) + \
+                 kullback_leiblers.gauss_kl(self.u_gm, self.u_gs_sqrt, Kgmm)
         return KL
 
     def build_likelihood(self):
@@ -111,6 +110,10 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
 
         return tf.reduce_sum(var_exp) * scale - KL
 
+    def maximum_log_likelihood_objective(self):
+        """We require this function"""
+        return self.build_likelihood()
+
     def build_predict(self, Xnew):
         '''
         This method builds latent variables - f, g, \Phi(g) from inducing distributions
@@ -120,11 +123,11 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         # q(f) = \int q(f|u_f) q(u_f) du_f
         # q(f) = N(f|A*u_fm,Kfnn + A(u_fs - Kfmm)t(A))  A = Kfnm*inv(Kfmm)
         fmean, fvar = conditionals.conditional(Xnew, self.Zf, self.kernf, self.u_fm,
-                                               full_cov=False, q_sqrt=self.u_fs_sqrt, whiten=self.whiten)
+                                               full_cov=False, q_sqrt=self.u_fs_sqrt, )
         fmean = fmean + self.mean_function(Xnew)
 
         gmean, gvar = conditionals.conditional(Xnew, self.Zg, self.kerng, self.u_gm,
-                                               full_cov=False, q_sqrt=self.u_gs_sqrt, whiten=self.whiten)
+                                               full_cov=False, q_sqrt=self.u_gs_sqrt, )
 
         # probit transformed expectations for  gamma
         ephi_g, ephi2_g, evar_phi_g = self.ProbitExpectations(gmean, gvar)
@@ -167,7 +170,7 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         """
 
         def normcdf(x):
-            return 0.5 * (1.0 + tf.erf(x / np.sqrt(2.0))) * (1. - 2.e-3) + 1.e-3
+            return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1. - 2.e-3) + 1.e-3
 
         def owent(h, a):
             """

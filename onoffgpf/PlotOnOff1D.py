@@ -4,40 +4,41 @@ import matplotlib.gridspec as gridspec
 import matplotlib as mpl
 from matplotlib import ticker
 import gpflow
+import tensorflow as tf
 
 def PlotOnOff1D(m):
     mpl.rcParams['figure.figsize'] = (11.0,10.0)
     mpl.rcParams.update({'font.size': 20})
 
-    _X = m.Xtrain.value
-    _Y = m.Ytrain.value
+    _X = m.Xtrain
+    _Y = m.Ytrain
 
     _gfmean,_gfvar,_,_fmean,_fvar,_gmean,_gvar,_pgmean,_pgvar = m.predict_onoffgp(_X)
-    _Zf = m.Zf.value
-    _Kf = m.kernf.compute_K_symm(_X)
-    _u_fm = m.u_fm.value
-    _u_fs_sqrt = m.u_fs_sqrt.value
+    _Zf = m.Zf.numpy()
+    _Kf = m.kernf.K(_X)
+    _u_fm = m.u_fm.numpy()
+    _u_fs_sqrt = m.u_fs_sqrt
 
-    _Zg = m.Zg.value
-    _Kg = m.kerng.compute_K_symm(_X)
-    _u_gm = m.u_gm.value
-    _u_gs_sqrt = m.u_gs_sqrt.value
+    _Zg = m.Zg.numpy()
+    _Kg = m.kerng.K(_X)
+    _u_gm = m.u_gm.numpy()
+    _u_gs_sqrt = m.u_gs_sqrt
 
-    _variance = m.likelihood.variance.value[0]
+    _variance = m.likelihood.variance
 
-    _Kpg = _pgmean.reshape(-1,1) * _pgmean.reshape(1,-1)
+    _Kpg = tf.reshape(_pgmean,(-1,1)) * tf.reshape(_pgmean, (1,-1))
     _Kfg = _Kpg * _Kf
 
     _X = _X.flatten()
     _Y = _Y.flatten()
-    _gfmean = _gfmean.flatten()
-    _gfvar  = _gfvar.flatten()
-    _fmean  = _fmean.flatten()
-    _fvar   = _fvar.flatten()
-    _gmean  = _gmean.flatten()
-    _gvar   = _gvar.flatten()
-    _pgmean = _pgmean.flatten()
-    _pgvar  = _pgvar.flatten()
+    _gfmean = tf.reshape(_gfmean, -1)
+    _gfvar  = tf.reshape(_gfvar, -1)
+    _fmean  = tf.reshape(_fmean, -1)
+    _fvar   = tf.reshape(_fvar, -1)
+    _gmean  = tf.reshape(_gmean, -1)
+    _gvar   = tf.reshape(_gvar, -1)
+    _pgmean = tf.reshape(_pgmean, -1)
+    _pgvar  = tf.reshape(_pgvar, -1)
 
 
     gs = gridspec.GridSpec(4, 4)

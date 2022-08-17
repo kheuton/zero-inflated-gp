@@ -2,14 +2,14 @@ from __future__ import absolute_import
 import tensorflow as tf
 import numpy as np
 from gpflow.base import Parameter
-from gpflow import transforms
-from gpflow.likelihoods import Likelihood
-from gpflow._settings import settings
+from gpflow.utilities import positive
+from gpflow.likelihoods import Gaussian
+from gpflow.config import default_float
 
-float_type = settings.dtypes.float_type
+float_type = default_float()
 np_float_type = np.float32 if float_type is tf.float32 else np.float64
 
-class OnOffLikelihood(Likelihood):
+class OnOffLikelihood(Gaussian):
     """
     Computes\int {log(y|f) [\int p(f,g) dg]} df = \int {log(y|f) [\int p(f|g) p(g) dg]} df
     Where
@@ -21,12 +21,11 @@ class OnOffLikelihood(Likelihood):
     (This term is in addition to standard SVGP classification terms)
     """
 
-    def __init__(self):
-        Likelihood.__init__(self)
-        self.variance = Param(0.01, transforms.positive)
+    def __init__(self, variance: float = 0.01,):
+        super().__init__(variance=variance)
 
     # not implemented logp, conditional_mean and others
 
     def variational_expectations(self,Fmu,Fvar,Fmuvar,Y):
-        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.log(self.variance) \
+        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) \
                 - 0.5 * (tf.square(Y - Fmu) + Fvar + Fmuvar) / self.variance
