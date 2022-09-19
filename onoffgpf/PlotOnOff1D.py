@@ -81,7 +81,6 @@ def PlotOnOff1D(m, softplus=False):
         shifted_softplus_f = tf.squeeze(tf.reduce_mean(shifted_softplus_f_samples, -1))
         shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1))
         shifted_softplus_f_low = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1))
-        import pdb; pdb.set_trace()
         ax1.plot(_X, tf.math.softplus(shifted_softplus_f), '-', color='#ff7707')
         y1 = shifted_softplus_f_up
         y2 = shifted_softplus_f_low
@@ -113,9 +112,9 @@ def PlotOnOff1D(m, softplus=False):
              markerfacecolor='#008b62',alpha=0.7) #,label = 'uf (optimized)')
 
     if softplus:
-        ax2.plot(_X, tf.math.softplus(_gfmean), '-', color='#ff7707', label=r"$f|g$")
-        f3 = tf.math.softplus((_gfmean - 1.5 * (np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean))))
-        f4 = tf.math.softplus((_gfmean + 1.5 * (np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean))))
+        ax2.plot(_X, shifted_softplus_f, '-', color='#ff7707', label=r"$f|g$")
+        f3 = shifted_softplus_f_up
+        f4 = shifted_softplus_f_low
     else:
         ax2.plot(_X,_gfmean,'-',color='#ff7707',label=r"$f|g$")
         f3 = (_gfmean-1.5*(np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)))
