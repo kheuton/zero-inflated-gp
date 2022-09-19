@@ -77,11 +77,11 @@ def PlotOnOff1D(m, softplus=False):
 
         f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
 
-        shifted_softplus_f_samples = tf.math.softplus(f_samples + 2)
+        shifted_softplus_f_samples = phi_g_samples*tf.math.softplus(f_samples + 2)
         shifted_softplus_f = tf.squeeze(tf.reduce_mean(shifted_softplus_f_samples, -1))
         shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1))
         shifted_softplus_f_low = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1))
-        ax1.plot(_X, tf.math.softplus(shifted_softplus_f), '-', color='#ff7707')
+        ax1.plot(_X, shifted_softplus_f, '-', color='#ff7707')
         y1 = shifted_softplus_f_up
         y2 = shifted_softplus_f_low
     else:
