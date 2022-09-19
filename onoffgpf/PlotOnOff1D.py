@@ -6,7 +6,7 @@ from matplotlib import ticker
 import gpflow
 import tensorflow as tf
 
-def PlotOnOff1D(m):
+def PlotOnOff1D(m, softplus=False):
     mpl.rcParams['figure.figsize'] = (11.0,10.0)
     mpl.rcParams.update({'font.size': 20})
 
@@ -53,9 +53,15 @@ def PlotOnOff1D(m):
 
 
     # plot y
-    ax1.plot(_X,_gfmean,'-',color='#ff7707')
-    y1 = (_gfmean-1.5*((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)) + np.sqrt(_variance)))
-    y2 = (_gfmean+1.5*((np.sqrt(_fvar) * _pgmean +  np.sqrt(_pgvar)*(1-_pgmean)) + np.sqrt(_variance)))
+
+    if softplus:
+        ax1.plot(_X, tf.math.softplus(_gfmean), '-', color='#ff7707')
+        y1 = tf.math.softplus((_gfmean - 1.5 * ((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean)) + np.sqrt(_variance))))
+        y2 = tf.math.softplus((_gfmean + 1.5 * ((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean)) + np.sqrt(_variance))))
+    else:
+        ax1.plot(_X, _gfmean, '-', color='#ff7707')
+        y1 = (_gfmean-1.5*((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)) + np.sqrt(_variance)))
+        y2 = (_gfmean+1.5*((np.sqrt(_fvar) * _pgmean +  np.sqrt(_pgvar)*(1-_pgmean)) + np.sqrt(_variance)))
     ax1.fill_between(_X,y1,y2,facecolor='#ff7707',alpha=0.5)
     ax1.scatter(_X,_Y,s=8,
              color='black',alpha=0.7)
@@ -67,17 +73,26 @@ def PlotOnOff1D(m):
 
     # plot f and f|g
     ax2.plot(_X,_fmean,'-',color='#008b62',label=r"$f$")
-    f1 = (_fmean-1.5*np.sqrt(_fvar))
-    f2 = (_fmean+1.5*np.sqrt(_fvar))
+    if softplus:
+        f1 = tf.math.softplus((_fmean - 1.5 * np.sqrt(_fvar)))
+        f2 = tf.math.softplus((_fmean + 1.5 * np.sqrt(_fvar)))
+    else:
+        f1 = (_fmean-1.5*np.sqrt(_fvar))
+        f2 = (_fmean+1.5*np.sqrt(_fvar))
     ax2.fill_between(_X,f1,f2,facecolor='#008b62',alpha=0.5)
     ax2.plot(_Zf,_u_fm,
              marker='o',linestyle = 'None',
              markeredgecolor = 'None',
              markerfacecolor='#008b62',alpha=0.7) #,label = 'uf (optimized)')
 
-    ax2.plot(_X,_gfmean,'-',color='#ff7707',label=r"$f|g$")
-    f3 = (_gfmean-1.5*(np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)))
-    f4 = (_gfmean+1.5*(np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)))
+    if softplus:
+        ax2.plot(_X, tf.math.softplus(_gfmean), '-', color='#ff7707', label=r"$f|g$")
+        f3 = tf.math.softplus((_gfmean - 1.5 * (np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean))))
+        f4 = tf.math.softplus((_gfmean + 1.5 * (np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean))))
+    else:
+        ax2.plot(_X,_gfmean,'-',color='#ff7707',label=r"$f|g$")
+        f3 = (_gfmean-1.5*(np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)))
+        f4 = (_gfmean+1.5*(np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)))
     ax2.fill_between(_X,f3,f4,facecolor='#ff7707',alpha=0.5)
 
     ax2.set_xlim(0,10)

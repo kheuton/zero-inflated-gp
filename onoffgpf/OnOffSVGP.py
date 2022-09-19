@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import tensorflow as tf
+import tensorflow_probability as tfp
 import numpy as np
 import pickle
 from gpflow.models import BayesianModel, ExternalDataTrainingLossMixin, InternalDataTrainingLossMixin
@@ -10,9 +11,21 @@ from gpflow.utilities import positive, triangular
 from gpflow.config import default_float, default_jitter
 from math import pi
 import time
-
+import scipy
 float_type = default_float()
-np_float_type = np.float32 if float_type is tf.float32 else np.float64
+np_float_type = np.float32 if float_type is tf.float32 else np.float32
+
+def normcdf(x):
+    return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1. - 2.e-3) + 1.e-3
+
+
+def log_normal_pdf(sample, mean, var, raxis=1):
+  log2pi = tf.math.log(2. * np.pi)
+  logvar = tf.math.log(var)
+  return tf.reduce_sum(
+      -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
+      axis=raxis)
+
 
 class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
     """
@@ -94,7 +107,7 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         return KL
 
     def build_likelihood(self):
-        # get prior KL
+        # get prior KLfloat_type
         KL = self.build_prior_KL()
 
         # get augmented functions
@@ -197,3 +210,99 @@ class OnOffSVGP(BayesianModel, InternalDataTrainingLossMixin):
         pgvar = (pgvar + tf.abs(pgvar)) / 2.
 
         return pgmean, pgmeansq, pgvar
+
+
+class OnOffSVGPMC(OnOffSVGP):
+
+    def __init__(self, X, Y, kernf, kerng, likelihood, Zf, Zg, mean_function=None, minibatch_size=None,
+                 name='model', samples=1000):
+        super().__init__(X, Y, kernf, kerng, likelihood, Zf, Zg, mean_function=mean_function, minibatch_size=minibatch_size,
+                 name=name)
+
+        self.samples = samples
+
+    def build_likelihood(self):
+        # get prior KL
+        KL = self.build_prior_KL()
+
+        # get augmented functions
+        _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
+
+        data_shape = self.X.shape
+        u = tf.random.normal(shape=data_shape + (self.samples,))
+        w = tf.random.normal(shape=data_shape + (self.samples,))
+
+        # Expand dims to give the mean a sample dimension
+        g_mean_NDS = tf.expand_dims(gmean, -1)
+        g_std_NDS = tf.expand_dims(tf.math.sqrt(gvar), -1)
+        g_samples = g_mean_NDS + u * g_std_NDS
+        del u
+        phi_g_samples = normcdf(g_samples)
+        del g_samples
+
+        f_mean_NDS = tf.expand_dims(fmean, -1)
+        f_var_NDS = tf.expand_dims(fvar, -1)
+        f_std_NDS = tf.math.sqrt(f_var_NDS)
+        f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
+
+        #y_normal = tfp.distributions.Normal(loc=f_samples, scale=tf.math.sqrt(self.likelihood.variance))
+        #py = y_normal.log_prob(tf.expand_dims(self.Y, -1))
+        py = log_normal_pdf(tf.expand_dims(self.Y, -1), f_samples, self.likelihood.variance)
+
+        # mean over samples
+        py = tf.reduce_mean(py, -1)
+        # sum over data
+        py = tf.reduce_sum(py)
+
+        # re-scale for minibatch size
+        scale = tf.cast(self.num_data, default_float()) / \
+                tf.cast(tf.shape(self.X)[0], default_float())
+
+        return py * scale - KL
+
+class OnOffSVGPPoiMC(OnOffSVGP):
+
+    def __init__(self, X, Y, kernf, kerng, likelihood, Zf, Zg, mean_function=None, minibatch_size=None,
+                 name='model', samples=1000):
+        super().__init__(X, Y, kernf, kerng, likelihood, Zf, Zg, mean_function=mean_function, minibatch_size=minibatch_size,
+                 name=name)
+
+        self.samples = samples
+
+    def build_likelihood(self):
+        # get prior KL
+        KL = self.build_prior_KL()
+
+        # get augmented functions
+        _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
+
+        data_shape = self.X.shape
+        u = tf.random.normal(shape=data_shape + (self.samples,))
+        w = tf.random.normal(shape=data_shape + (self.samples,))
+
+        # Expand dims to give the mean a sample dimension
+        g_mean_NDS = tf.expand_dims(gmean, -1)
+        g_std_NDS = tf.expand_dims(tf.math.sqrt(gvar), -1)
+        g_samples = g_mean_NDS + u * g_std_NDS
+        del u
+        phi_g_samples = normcdf(g_samples)
+        del g_samples
+
+        f_mean_NDS = tf.expand_dims(fmean, -1)
+        f_var_NDS = tf.expand_dims(fvar, -1)
+        f_std_NDS = tf.math.sqrt(f_var_NDS)
+        f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
+
+        y_poi = tfp.distributions.Poisson(rate=tf.math.softplus(f_samples),force_probs_to_zero_outside_support=True)
+        py = y_poi.log_prob(tf.expand_dims(self.Y, -1))
+
+        # mean over samples
+        py = tf.reduce_mean(py, -1)
+        # sum over data
+        py = tf.reduce_sum(py)
+
+        # re-scale for minibatch size
+        scale = tf.cast(self.num_data, default_float()) / \
+                tf.cast(tf.shape(self.X)[0], default_float())
+
+        return py * scale - KL
