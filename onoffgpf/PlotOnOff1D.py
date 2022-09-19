@@ -33,6 +33,11 @@ def PlotOnOff1D(m, softplus=False):
     _Kpg = tf.reshape(_pgmean,(-1,1)) * tf.reshape(_pgmean, (1,-1))
     _Kfg = _Kpg * _Kf
 
+    g_mean_NDS = tf.expand_dims(_gmean, -1)
+    g_std_NDS = tf.expand_dims(tf.math.sqrt(_gvar), -1)
+    f_mean_NDS = tf.expand_dims(_fmean, -1)
+    f_var_NDS = tf.expand_dims(_fvar, -1)
+    f_std_NDS = tf.math.sqrt(f_var_NDS)
     _X = _X.flatten()
     _Y = _Y.flatten()
     _gfmean = tf.reshape(_gfmean, -1)
@@ -65,23 +70,18 @@ def PlotOnOff1D(m, softplus=False):
         w = tf.random.normal(shape=data_shape + (m.samples,))
 
         # Expand dims to give the mean a sample dimension
-        g_mean_NDS = tf.expand_dims(_gmean, -1)
-        g_std_NDS = tf.expand_dims(tf.math.sqrt(_gvar), -1)
         g_samples = g_mean_NDS + u * g_std_NDS
         del u
         phi_g_samples = normcdf(g_samples)
         del g_samples
 
-        f_mean_NDS = tf.expand_dims(_fmean, -1)
-        f_var_NDS = tf.expand_dims(_fvar, -1)
-        f_std_NDS = tf.math.sqrt(f_var_NDS)
         f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
 
         shifted_softplus_f_samples = tf.math.softplus(f_samples + 2)
-        shifted_softplus_f = tf.reduce_mean(shifted_softplus_f_samples, -1)
-        shifted_softplus_f_up = tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1)
-        shifted_softplus_f_low = tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1)
-
+        shifted_softplus_f = tf.squeeze(tf.reduce_mean(shifted_softplus_f_samples, -1))
+        shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1))
+        shifted_softplus_f_low = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1))
+        import pdb; pdb.set_trace()
         ax1.plot(_X, tf.math.softplus(shifted_softplus_f), '-', color='#ff7707')
         y1 = shifted_softplus_f_up
         y2 = shifted_softplus_f_low
