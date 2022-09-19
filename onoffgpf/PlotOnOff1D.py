@@ -5,6 +5,10 @@ import matplotlib as mpl
 from matplotlib import ticker
 import gpflow
 import tensorflow as tf
+import tensorflow_probability as tfp
+
+def normcdf(x):
+    return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1. - 2.e-3) + 1.e-3
 
 def PlotOnOff1D(m, softplus=False):
     mpl.rcParams['figure.figsize'] = (11.0,10.0)
@@ -55,9 +59,32 @@ def PlotOnOff1D(m, softplus=False):
     # plot y
 
     if softplus:
-        ax1.plot(_X, tf.math.softplus(_gfmean), '-', color='#ff7707')
-        y1 = tf.math.softplus((_gfmean - 1.5 * ((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean)) + np.sqrt(_variance))))
-        y2 = tf.math.softplus((_gfmean + 1.5 * ((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar) * (1 - _pgmean)) + np.sqrt(_variance))))
+
+        data_shape = m.X.shape
+        u = tf.random.normal(shape=data_shape + (m.samples,))
+        w = tf.random.normal(shape=data_shape + (m.samples,))
+
+        # Expand dims to give the mean a sample dimension
+        g_mean_NDS = tf.expand_dims(_gmean, -1)
+        g_std_NDS = tf.expand_dims(tf.math.sqrt(_gvar), -1)
+        g_samples = g_mean_NDS + u * g_std_NDS
+        del u
+        phi_g_samples = normcdf(g_samples)
+        del g_samples
+
+        f_mean_NDS = tf.expand_dims(_fmean, -1)
+        f_var_NDS = tf.expand_dims(_fvar, -1)
+        f_std_NDS = tf.math.sqrt(f_var_NDS)
+        f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
+
+        shifted_softplus_f_samples = tf.math.softplus(f_samples + 2)
+        shifted_softplus_f = tf.reduce_mean(shifted_softplus_f_samples, -1)
+        shifted_softplus_f_up = tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1)
+        shifted_softplus_f_low = tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1)
+
+        ax1.plot(_X, tf.math.softplus(shifted_softplus_f), '-', color='#ff7707')
+        y1 = shifted_softplus_f_up
+        y2 = shifted_softplus_f_low
     else:
         ax1.plot(_X, _gfmean, '-', color='#ff7707')
         y1 = (_gfmean-1.5*((np.sqrt(_fvar) * _pgmean + np.sqrt(_pgvar)*(1-_pgmean)) + np.sqrt(_variance)))
