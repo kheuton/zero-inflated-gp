@@ -293,8 +293,18 @@ class OnOffSVGPPoiMC(OnOffSVGP):
         f_std_NDS = tf.math.sqrt(f_var_NDS)
         f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
 
-        y_poi = tfp.distributions.Poisson(rate=tf.math.softplus(f_samples),force_probs_to_zero_outside_support=True)
-        py = y_poi.log_prob(tf.expand_dims(self.Y, -1))
+        shifted_softplus_f_samples = tf.math.softplus(f_samples+2)
+        del f_samples
+
+        y_poi = tfp.distributions.Poisson(rate=tf.math.softplus(shifted_softplus_f_samples),
+                                          force_probs_to_zero_outside_support=True)
+
+
+        y_NDS = tf.expand_dims(self.Y, -1)
+        y_is_zero = tf.cast(y_NDS==0, default_float)
+        py_if_zero = (1-phi_g_samples) + phi_g_samples*y_poi.log_prob(y_NDS)
+        py_if_greater = phi_g_samples*y_poi.log_prob(y_NDS)
+        py = y_is_zero*py_if_zero + (1-y_is_zero)*py_if_greater
 
         # mean over samples
         py = tf.reduce_mean(py, -1)
