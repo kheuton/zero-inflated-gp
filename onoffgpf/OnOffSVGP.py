@@ -301,7 +301,7 @@ class OnOffSVGPPoiMC(OnOffSVGP):
 
 
         y_NDS = tf.expand_dims(self.Y, -1)
-        y_is_zero = tf.cast(y_NDS==0, default_float)
+        y_is_zero = tf.cast(y_NDS==0, default_float())
         py_if_zero = (1-phi_g_samples) + phi_g_samples*y_poi.log_prob(y_NDS)
         py_if_greater = phi_g_samples*y_poi.log_prob(y_NDS)
         py = y_is_zero*py_if_zero + (1-y_is_zero)*py_if_greater
