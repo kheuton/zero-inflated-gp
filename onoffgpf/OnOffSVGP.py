@@ -229,8 +229,8 @@ class OnOffSVGPMC(OnOffSVGP):
         _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
 
         data_shape = self.X.shape
-        u = tf.random.normal(shape=data_shape + (self.samples,))
-        w = tf.random.normal(shape=data_shape + (self.samples,))
+        u = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
+        w = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
 
         # Expand dims to give the mean a sample dimension
         g_mean_NDS = tf.expand_dims(gmean, -1)
@@ -277,8 +277,8 @@ class OnOffSVGPPoiMC(OnOffSVGP):
         _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
 
         data_shape = self.X.shape
-        u = tf.random.normal(shape=data_shape + (self.samples,))
-        w = tf.random.normal(shape=data_shape + (self.samples,))
+        u = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
+        w = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
 
         # Expand dims to give the mean a sample dimension
         g_mean_NDS = tf.expand_dims(gmean, -1)
