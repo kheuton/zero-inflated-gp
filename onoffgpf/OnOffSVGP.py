@@ -228,7 +228,7 @@ class OnOffSVGPMC(OnOffSVGP):
         # get augmented functions
         _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
 
-        data_shape = self.X.shape
+        data_shape = fmean.shape
         u = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
         w = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
 
@@ -276,7 +276,7 @@ class OnOffSVGPPoiMC(OnOffSVGP):
         # get augmented functions
         _, _, _, fmean, fvar, gmean, gvar, _, _ = self.build_predict(self.X)
 
-        data_shape = self.X.shape
+        data_shape = fmean.shape
         u = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
         w = tf.random.normal(shape=data_shape + (self.samples,), dtype=default_float())
 
