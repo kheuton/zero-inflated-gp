@@ -78,9 +78,15 @@ def PlotOnOff1D(m, softplus=False):
         f_samples = f_mean_NDS * phi_g_samples + w * f_std_NDS * phi_g_samples
 
         shifted_softplus_f_samples = phi_g_samples*tf.math.softplus(f_samples + 2)
+
+        y_poi = tfp.distributions.Poisson(rate=shifted_softplus_f_samples,
+                                          force_probs_to_zero_outside_support=True)
+
+        y_samples = y_poi.sample(sample_shape=data_shape)
+
         shifted_softplus_f = tf.squeeze(tf.reduce_mean(shifted_softplus_f_samples, -1))
-        shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1))
-        shifted_softplus_f_low = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1))
+        shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(y_samples, 97.5, axis=-1))
+        shifted_softplus_f_low = tf.squeeze(tfp.stats.percentile(y_samples, 2.5, axis=-1))
         ax1.plot(_X, shifted_softplus_f, '-', color='#ff7707')
         y1 = shifted_softplus_f_up
         y2 = shifted_softplus_f_low
@@ -100,8 +106,9 @@ def PlotOnOff1D(m, softplus=False):
     # plot f and f|g
     ax2.plot(_X,_fmean,'-',color='#008b62',label=r"$f$")
     if softplus:
-        f1 = tf.math.softplus((_fmean - 1.5 * np.sqrt(_fvar)))
-        f2 = tf.math.softplus((_fmean + 1.5 * np.sqrt(_fvar)))
+        f1 = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 97.5, axis=-1))
+        f2 = tf.squeeze(tfp.stats.percentile(shifted_softplus_f_samples, 2.5, axis=-1))
+
     else:
         f1 = (_fmean-1.5*np.sqrt(_fvar))
         f2 = (_fmean+1.5*np.sqrt(_fvar))
