@@ -65,7 +65,7 @@ def PlotOnOff1D(m, softplus=False):
 
     if softplus:
 
-        data_shape = m.X.shape
+        data_shape = _fmean.shape
         u = tf.random.normal(shape=data_shape + (m.samples,))
         w = tf.random.normal(shape=data_shape + (m.samples,))
 
