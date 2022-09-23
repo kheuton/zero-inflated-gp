@@ -18,6 +18,7 @@ def PlotOnOff1D(m, softplus=False):
     _Y = m.Ytrain
 
     _gfmean,_gfvar,_,_fmean,_fvar,_gmean,_gvar,_pgmean,_pgvar = m.predict_onoffgp(_X)
+    data_shape = _fmean.shape
     _Zf = m.Zf.numpy()
     _Kf = m.kernf.K(_X)
     _u_fm = m.u_fm.numpy()
@@ -65,7 +66,6 @@ def PlotOnOff1D(m, softplus=False):
 
     if softplus:
 
-        data_shape = _fmean.shape
         u = tf.random.normal(shape=data_shape + (m.samples,))
         w = tf.random.normal(shape=data_shape + (m.samples,))
 
@@ -82,7 +82,7 @@ def PlotOnOff1D(m, softplus=False):
         y_poi = tfp.distributions.Poisson(rate=shifted_softplus_f_samples,
                                           force_probs_to_zero_outside_support=True)
 
-        y_samples = y_poi.sample(sample_shape=data_shape)
+        y_samples = y_poi.sample()
 
         shifted_softplus_f = tf.squeeze(tf.reduce_mean(shifted_softplus_f_samples, -1))
         shifted_softplus_f_up = tf.squeeze(tfp.stats.percentile(y_samples, 97.5, axis=-1))
