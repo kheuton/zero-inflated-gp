@@ -296,9 +296,8 @@ class OnOffSVGPPoiMC(OnOffSVGP):
         shifted_softplus_f_samples = tf.math.softplus(f_samples+2)
         del f_samples
 
-        y_poi = tfp.distributions.Poisson(rate=tf.math.softplus(shifted_softplus_f_samples),
+        y_poi = tfp.distributions.Poisson(rate=shifted_softplus_f_samples,
                                           force_probs_to_zero_outside_support=True)
-
 
         y_NDS = tf.expand_dims(self.Y, -1)
         y_is_zero = tf.cast(y_NDS==0, default_float())
