@@ -112,7 +112,7 @@ def PlotOnOff1D(m, softplus=False):
     else:
         f1 = (_fmean-1.5*np.sqrt(_fvar))
         f2 = (_fmean+1.5*np.sqrt(_fvar))
-    ax2.fill_between(_X,f1,f2,facecolor='#008b62',alpha=0.5)
+        ax2.fill_between(_X,f1,f2,facecolor='#008b62',alpha=0.5)
     ax2.plot(_Zf,_u_fm,
              marker='o',linestyle = 'None',
              markeredgecolor = 'None',
@@ -137,8 +137,12 @@ def PlotOnOff1D(m, softplus=False):
 
     # plot phi(gamma)
     ax3.plot(_X,_pgmean,'-',color='#003366')
-    pg1 = (_pgmean-2*np.sqrt(_pgvar))
-    pg2 = (_pgmean+2*np.sqrt(_pgvar))
+    if softplus:
+        pg1 = tf.squeeze(tfp.stats.percentile(phi_g_samples, 97.5, axis=-1))
+        pg2 = tf.squeeze(tfp.stats.percentile(phi_g_samples, 2.5, axis=-1))
+    else:
+        pg1 = (_pgmean-2*np.sqrt(_pgvar))
+        pg2 = (_pgmean+2*np.sqrt(_pgvar))
     ax3.fill_between(_X,pg1,pg2,facecolor='#6684a3',alpha=0.7)
     ax3.axhline(y=0.5,linestyle='--',color='#333333')
     ax3.set_xlim(0,10)
