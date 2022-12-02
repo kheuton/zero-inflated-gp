@@ -28,3 +28,4 @@ For this experiment, the main model along with Kronecker approximations is imple
 The model fit on the precipitation dataset is illustrated below.
 
 <img src="plots/pptr.png" width="400" height="600" />
+
